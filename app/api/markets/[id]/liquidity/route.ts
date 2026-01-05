@@ -4,12 +4,12 @@ import { addLiquidity, removeLiquidity } from '@/lib/utils/amm'
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const body = await request.json()
     const { action, amount } = body
-    const marketId = params.id
+    const { id: marketId } = await params
 
     const supabase = await createClient()
 

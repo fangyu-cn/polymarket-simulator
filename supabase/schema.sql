@@ -5,9 +5,21 @@
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID REFERENCES auth.users PRIMARY KEY,
   username TEXT UNIQUE,
+  email TEXT, -- 冗余存储，方便查询
+  avatar_url TEXT,
   wallet_balance DECIMAL(15,2) DEFAULT 1000.00,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  
+  -- 统计数据（可选，用于性能优化）
+  total_trades INTEGER DEFAULT 0,
+  total_markets_created INTEGER DEFAULT 0,
+  
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- 创建索引
+CREATE INDEX IF NOT EXISTS idx_users_username ON public.users(username);
+CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
 
 -- 2. 市场表
 CREATE TABLE IF NOT EXISTS public.markets (
@@ -82,6 +94,16 @@ ALTER TABLE public.markets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_positions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trades ENABLE ROW LEVEL SECURITY;
 
+-- RLS 策略：用户可以查看自己的信息
+CREATE POLICY "Users can view own profile" ON public.users
+  FOR SELECT USING (auth.uid() = id);
+
+-- RLS 策略：用户可以更新自己的信息
+CREATE POLICY "Users can update own profile" ON public.users
+  FOR UPDATE 
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
+
 -- RLS 策略：用户可以查看所有市场
 CREATE POLICY "Markets are viewable by everyone" ON public.markets
   FOR SELECT USING (true);
@@ -110,11 +132,26 @@ CREATE POLICY "Users can create trades" ON public.trades
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.users (id, username, wallet_balance)
-  VALUES (NEW.id, NEW.email, 1000.00);
+  INSERT INTO public.users (id, username, email, wallet_balance)
+  VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)), NEW.email, 1000.00);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 函数：更新 updated_at 时间戳
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 触发器：自动更新 updated_at
+CREATE TRIGGER update_users_updated_at
+  BEFORE UPDATE ON public.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
 
 -- 触发器：新用户注册时自动创建记录
 CREATE TRIGGER on_auth_user_created

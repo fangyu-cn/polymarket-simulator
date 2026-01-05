@@ -1,8 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Market } from '@/lib/store/useMarketStore'
+import { useRouter } from 'next/navigation'
+import { Market, useMarketStore } from '@/lib/store/useMarketStore'
 import { getPrices } from '@/lib/utils/amm'
+import { createClient } from '@/lib/supabase/client'
+import { showToast } from '@/components/ui/Toast'
 import { ArrowUp, ArrowDown } from 'lucide-react'
 
 interface TradingPanelProps {
@@ -10,6 +13,8 @@ interface TradingPanelProps {
 }
 
 export default function TradingPanel({ market }: TradingPanelProps) {
+  const router = useRouter()
+  const { setMarkets, setSelectedMarket } = useMarketStore()
   const [action, setAction] = useState<'buy' | 'sell'>('buy')
   const [option, setOption] = useState<'yes' | 'no'>('yes')
   const [amount, setAmount] = useState('')
@@ -23,7 +28,7 @@ export default function TradingPanel({ market }: TradingPanelProps) {
 
   const handleTrade = async () => {
     if (!amount || parseFloat(amount) <= 0) {
-      alert('请输入有效金额')
+      showToast('请输入有效金额', 'warning')
       return
     }
 
@@ -44,17 +49,44 @@ export default function TradingPanel({ market }: TradingPanelProps) {
         }),
       })
 
+      const data = await response.json()
+
       if (response.ok) {
         setAmount('')
-        alert('交易成功！')
-        // TODO: 刷新市场数据
+        showToast('交易成功！', 'success')
+        
+        // 刷新市场数据
+        try {
+          const supabase = createClient()
+          const { data: updatedMarket, error: marketError } = await supabase
+            .from('markets')
+            .select('*')
+            .eq('id', market.id)
+            .single()
+
+          if (!marketError && updatedMarket) {
+            // 更新 store 中的市场数据
+            setSelectedMarket(updatedMarket)
+            setMarkets((prevMarkets) =>
+              prevMarkets.map((m) => (m.id === market.id ? updatedMarket : m))
+            )
+          }
+        } catch (error) {
+          console.error('Error refreshing market data:', error)
+        }
+
+        // 刷新页面以确保所有数据同步
+        setTimeout(() => {
+          router.refresh()
+        }, 500)
       } else {
-        const error = await response.json()
-        alert(error.message || '交易失败')
+        const errorMessage = data.message || data.error || '交易失败'
+        showToast(errorMessage, 'error')
+        console.error('Trade error:', data)
       }
     } catch (error) {
       console.error('Trade error:', error)
-      alert('交易失败，请重试')
+      showToast('交易失败，请重试', 'error')
     } finally {
       setLoading(false)
     }

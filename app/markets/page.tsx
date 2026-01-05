@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useMarketStore } from '@/lib/store/useMarketStore'
 import { getPrices } from '@/lib/utils/amm'
+import { createClient } from '@/lib/supabase/client'
 import { TrendingUp, TrendingDown, Clock, DollarSign } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -12,40 +13,29 @@ export default function MarketsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // TODO: 从 Supabase 获取市场数据
-    // 暂时使用模拟数据
-    const mockMarkets = [
-      {
-        id: '1',
-        question: '比特币会在 2024 年底超过 10 万美元吗？',
-        description: '预测比特币价格走势',
-        creator_id: 'user1',
-        yes_pool: 5000,
-        no_pool: 5000,
-        liquidity_token_supply: 10000,
-        is_resolved: false,
-        outcome: null,
-        resolution_date: null,
-        created_at: new Date().toISOString(),
-        ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        id: '2',
-        question: 'OpenAI 会在 2024 年发布 GPT-5 吗？',
-        description: 'AI 技术发展预测',
-        creator_id: 'user2',
-        yes_pool: 3000,
-        no_pool: 7000,
-        liquidity_token_supply: 10000,
-        is_resolved: false,
-        outcome: null,
-        resolution_date: null,
-        created_at: new Date().toISOString(),
-        ends_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ]
-    setMarkets(mockMarkets)
-    setLoading(false)
+    async function fetchMarkets() {
+      try {
+        const supabase = createClient()
+        const { data, error } = await supabase
+          .from('markets')
+          .select('*')
+          .order('created_at', { ascending: false })
+
+        if (error) {
+          console.error('Error fetching markets:', error)
+          setMarkets([])
+        } else {
+          setMarkets(data || [])
+        }
+      } catch (error) {
+        console.error('Error:', error)
+        setMarkets([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchMarkets()
   }, [setMarkets])
 
   if (loading) {

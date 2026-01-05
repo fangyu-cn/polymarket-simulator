@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Market } from '@/lib/store/useMarketStore'
+import { showToast } from '@/components/ui/Toast'
 import { Plus, Minus } from 'lucide-react'
 
 interface LiquidityPanelProps {
@@ -17,7 +18,7 @@ export default function LiquidityPanel({ market }: LiquidityPanelProps) {
 
   const handleLiquidity = async () => {
     if (!amount || parseFloat(amount) <= 0) {
-      alert('请输入有效金额')
+      showToast('请输入有效金额', 'warning')
       return
     }
 
@@ -32,17 +33,23 @@ export default function LiquidityPanel({ market }: LiquidityPanelProps) {
         }),
       })
 
+      const data = await response.json()
+
       if (response.ok) {
         setAmount('')
-        alert(action === 'add' ? '成功添加流动性！' : '成功移除流动性！')
-        // TODO: 刷新市场数据
+        showToast(
+          action === 'add' ? '成功添加流动性！' : '成功移除流动性！',
+          'success'
+        )
+        // 刷新页面以更新市场数据
+        window.location.reload()
       } else {
-        const error = await response.json()
-        alert(error.message || '操作失败')
+        showToast(data.error || data.message || '操作失败', 'error')
+        console.error('Liquidity error:', data)
       }
     } catch (error) {
       console.error('Liquidity error:', error)
-      alert('操作失败，请重试')
+      showToast('操作失败，请重试', 'error')
     } finally {
       setLoading(false)
     }

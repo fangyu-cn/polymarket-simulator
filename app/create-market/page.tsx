@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { showToast } from '@/components/ui/Toast'
 import { Plus } from 'lucide-react'
 
 export default function CreateMarketPage() {
@@ -31,15 +32,18 @@ export default function CreateMarketPage() {
         }),
       })
 
+      const data = await response.json()
+
       if (response.ok) {
-        const data = await response.json()
+        showToast('市场创建成功！', 'success')
         router.push(`/markets/${data.id}`)
       } else {
-        alert('创建失败，请重试')
+        showToast(data.error || data.message || '创建失败，请重试', 'error')
+        console.error('Create market error:', data)
       }
     } catch (error) {
       console.error('Error creating market:', error)
-      alert('创建失败，请重试')
+      showToast('创建失败，请重试', 'error')
     } finally {
       setLoading(false)
     }

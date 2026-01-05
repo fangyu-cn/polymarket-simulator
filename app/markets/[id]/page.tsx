@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useMarketStore } from '@/lib/store/useMarketStore'
 import { getPrices } from '@/lib/utils/amm'
+import { createClient } from '@/lib/supabase/client'
 import TradingPanel from '@/components/trading/TradingPanel'
 import PriceChart from '@/components/market/PriceChart'
 import LiquidityPanel from '@/components/trading/LiquidityPanel'
@@ -12,17 +13,39 @@ import { Clock, DollarSign, TrendingUp } from 'lucide-react'
 export default function MarketDetailPage() {
   const params = useParams()
   const marketId = params.id as string
-  const { markets, selectedMarket, setSelectedMarket } = useMarketStore()
+  const { markets, selectedMarket, setSelectedMarket, setMarkets } = useMarketStore()
   const [activeTab, setActiveTab] = useState<'trade' | 'liquidity'>('trade')
 
   useEffect(() => {
-    const market = markets.find((m) => m.id === marketId)
-    if (market) {
-      setSelectedMarket(market)
-    } else {
-      // TODO: 从 Supabase 获取市场数据
+    async function fetchMarket() {
+      const market = markets.find((m) => m.id === marketId)
+      if (market) {
+        setSelectedMarket(market)
+      } else {
+        // 从 Supabase 获取市场数据
+        try {
+          const supabase = createClient()
+          const { data, error } = await supabase
+            .from('markets')
+            .select('*')
+            .eq('id', marketId)
+            .single()
+
+          if (error) {
+            console.error('Error fetching market:', error)
+          } else if (data) {
+            setSelectedMarket(data)
+            // 也更新到 store
+            setMarkets([...markets, data])
+          }
+        } catch (error) {
+          console.error('Error:', error)
+        }
+      }
     }
-  }, [marketId, markets, setSelectedMarket])
+
+    fetchMarket()
+  }, [marketId, markets, setSelectedMarket, setMarkets])
 
   if (!selectedMarket) {
     return (
